@@ -98,6 +98,7 @@ async function main() {
 
         // Create a descriptive name for the mod package.
         const projectName = createProjectName(packageJson);
+        const projectZip = createProjectName(packageJson, true);
         logger.log("success", `Project name created: ${projectName}`);
 
         // Remove the old distribution directory and create a fresh one.
@@ -116,13 +117,13 @@ async function main() {
 
         // Create a zip archive of the project files.
         logger.log("info", "Beginning folder compression...");
-        const zipFilePath = path.join(path.dirname(projectDir), `${projectName}.zip`);
+        const zipFilePath = path.join(path.dirname(projectDir), `${projectZip}.zip`);
         await createZipFile(projectDir, zipFilePath, "user/mods/" + projectName);
         logger.log("success", "Archive successfully created.");
         logger.log("info", zipFilePath);
 
         // Move the zip file inside of the project directory, within the temporary working directory.
-        const zipFileInProjectDir = path.join(projectDir, `${projectName}.zip`);
+        const zipFileInProjectDir = path.join(projectDir, `${projectZip}.zip`);
         await fs.move(zipFilePath, zipFileInProjectDir);
         logger.log("success", "Archive successfully moved.");
         logger.log("info", zipFileInProjectDir);
@@ -135,7 +136,7 @@ async function main() {
         logger.log("success", "------------------------------------");
         logger.log("success", "Build script completed successfully!");
         logger.log("success", "Your mod package has been created in the 'dist' directory:");
-        logger.log("success", `/${path.relative(process.cwd(), path.join(distDir, `${projectName}.zip`))}`);
+        logger.log("success", `  ${path.relative(process.cwd(), path.join(distDir, `${projectZip}.zip`))}`);
         logger.log("success", "------------------------------------");
         if (!verbose) {
             logger.log("success", "To see a detailed build log, use `npm run buildinfo`.");
@@ -214,21 +215,27 @@ async function loadPackageJson(currentDir) {
 
 /**
  * Constructs a descriptive name for the mod package using details from the `package.json` file. The name is created by
- * concatenating the project name, version, and a timestamp, resulting in a unique and descriptive file name for each
- * build. This name is used as the base name for the temporary working directory and the final ZIP archive, helping to
+ * concatenating the author, project name, and optionally version.
+ * This name is used as the base name for the temporary working directory and the final ZIP archive, helping to
  * identify different versions of the mod package easily.
  *
  * @param {Object} packageJson - A JSON object containing the contents of the `package.json` file.
+ * @param {boolean} includeVersion - Whether to include the version in the resulting name
  * @returns {string} A string representing the constructed project name.
  */
-function createProjectName(packageJson) {
-    // Remove any non-alphanumeric characters from the author and name.
-    const author = packageJson.author.replace(/\W/g, "");
-    const name = packageJson.name.replace(/\W/g, "");
+function createProjectName(packageJson, includeVersion = false) {
+    // Only allow a-z, 0-9, underscore and dash
+    const author = packageJson.author.replace(/[^A-Za-z0-9_-]/g, "");
+    const name = packageJson.name.replace(/[^A-Za-z0-9_-]/g, "");
     const version = packageJson.version;
 
     // Ensure the name is lowercase, as per the package.json specification.
-    return `${author}-${name}-${version}`.toLowerCase();
+    if (includeVersion)
+    {
+        return `${author}-${name}-${version}`;
+    }
+
+    return `${author}-${name}`;
 }
 
 /**
