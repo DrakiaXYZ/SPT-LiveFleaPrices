@@ -61,6 +61,10 @@ class Mod implements IPostDBLoadModAsync
 
             // Store the prices to disk for next time
             fs.writeFileSync(Mod.pricesPath, JSON.stringify(prices));
+
+            // Update config file with the next update time
+            Mod.config.nextUpdate = Math.floor(Date.now() / 1000) + 3600;
+            fs.writeFileSync(Mod.configPath, JSON.stringify(Mod.config, null, 4));
         }
         // Otherwise, read the file from disk
         else
@@ -74,10 +78,6 @@ class Mod implements IPostDBLoadModAsync
             priceTable[itemId] = prices[itemId];
         }
         logger.info("Flea Prices Updated!");
-
-        // Update config file with the next update time
-        Mod.config.nextUpdate = Math.floor(Date.now() / 1000) + 3600;
-        fs.writeFileSync(Mod.configPath, JSON.stringify(Mod.config, null, 4));
 
         return true;
     }
