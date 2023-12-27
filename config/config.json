@@ -1,3 +1,4 @@
 {
-    "nextUpdate": 0
+    "nextUpdate": 0,
+    "maxIncreaseMult": 10
 }

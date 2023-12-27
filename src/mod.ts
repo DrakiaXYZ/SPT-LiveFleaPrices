@@ -41,6 +41,8 @@ class Mod implements IPostDBLoadModAsync
         const logger = Mod.container.resolve<ILogger>("WinstonLogger");
         const databaseServer = Mod.container.resolve<DatabaseServer>("DatabaseServer");
         const priceTable = databaseServer.getTables().templates.prices;
+        const itemTable = databaseServer.getTables().templates.items;
+        const handbookTable = databaseServer.getTables().templates.handbook;
         let prices: any;
 
         // Fetch the latest prices.json if we're triggered with fetch enabled, or the prices file doesn't exist
@@ -75,7 +77,23 @@ class Mod implements IPostDBLoadModAsync
         // Loop through the new prices file, updating all prices present
         for (const itemId in prices)
         {
-            priceTable[itemId] = prices[itemId];
+            if (!itemTable[itemId])
+            {
+                logger.debug(`Skipping ${itemId} as it doesn't exist in itemTable`);
+                continue;
+            }
+
+            const basePrice = priceTable[itemId] ?? handbookTable.Items.find(x => x.Id == itemId)?.Price ?? 1;
+            const maxPrice = basePrice * Mod.config.maxIncreaseMult;
+            if (prices[itemId] <= maxPrice)
+            {
+                priceTable[itemId] = prices[itemId];
+            }
+            else
+            {
+                logger.debug(`Setting ${itemId} to ${maxPrice} due to over inflation`);
+                priceTable[itemId] = maxPrice;
+            }
         }
         logger.info("Flea Prices Updated!");
 
