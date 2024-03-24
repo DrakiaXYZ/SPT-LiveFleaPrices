@@ -1,16 +1,16 @@
-import { DependencyContainer } from "tsyringe";
+import type { DependencyContainer } from "tsyringe";
 
-import { ILogger } from "@spt-aki/models/spt/utils/ILogger";
-import { IPostDBLoadModAsync } from "@spt-aki/models/external/IPostDBLoadModAsync";
-import { DatabaseServer } from "@spt-aki/servers/DatabaseServer";
-import * as fs from "fs";
-import * as path from "path";
+import type { ILogger } from "@spt-aki/models/spt/utils/ILogger";
+import type { IPostDBLoadModAsync } from "@spt-aki/models/external/IPostDBLoadModAsync";
+import type { DatabaseServer } from "@spt-aki/servers/DatabaseServer";
+import * as fs from "node:fs";
+import * as path from "node:path";
 
 class Mod implements IPostDBLoadModAsync
 {
     private static container: DependencyContainer;
-    private static updateTimer: any;
-    private static config: any;
+    private static updateTimer: NodeJS.Timeout;
+    private static config: Config;
     private static configPath = path.resolve(__dirname, "../config/config.json");
     private static pricesPath = path.resolve(__dirname, "../config/prices.json");
 
@@ -43,7 +43,7 @@ class Mod implements IPostDBLoadModAsync
         const priceTable = databaseServer.getTables().templates.prices;
         const itemTable = databaseServer.getTables().templates.items;
         const handbookTable = databaseServer.getTables().templates.handbook;
-        let prices: any;
+        let prices: Record<string, number>;
 
         // Fetch the latest prices.json if we're triggered with fetch enabled, or the prices file doesn't exist
         if (fetchPrices || !fs.existsSync(Mod.pricesPath))
@@ -83,7 +83,12 @@ class Mod implements IPostDBLoadModAsync
                 continue;
             }
 
-            const basePrice = priceTable[itemId] ?? handbookTable.Items.find(x => x.Id == itemId)?.Price ?? 1;
+            let basePrice = priceTable[itemId];
+            if (!basePrice)
+            {
+                basePrice = handbookTable.Items.find(x => x.Id === itemId)?.Price ?? 1;
+            }
+
             const maxPrice = basePrice * Mod.config.maxIncreaseMult;
             if (prices[itemId] <= maxPrice)
             {
@@ -99,6 +104,12 @@ class Mod implements IPostDBLoadModAsync
 
         return true;
     }
+}
+
+interface Config 
+{
+    nextUpdate: number,
+    maxIncreaseMult: number,
 }
 
 module.exports = { mod: new Mod() }
