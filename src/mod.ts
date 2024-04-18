@@ -3,6 +3,7 @@ import type { DependencyContainer } from "tsyringe";
 import type { ILogger } from "@spt-aki/models/spt/utils/ILogger";
 import type { IPostDBLoadModAsync } from "@spt-aki/models/external/IPostDBLoadModAsync";
 import type { DatabaseServer } from "@spt-aki/servers/DatabaseServer";
+import type { RagfairPriceService } from "@spt-aki/services/RagfairPriceService";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -13,11 +14,17 @@ class Mod implements IPostDBLoadModAsync
     private static config: Config;
     private static configPath = path.resolve(__dirname, "../config/config.json");
     private static pricesPath = path.resolve(__dirname, "../config/prices.json");
+    private static originalPrices;
 
     public async postDBLoadAsync(container: DependencyContainer): Promise<void> 
     {
         Mod.container = container;
         Mod.config = JSON.parse(fs.readFileSync(Mod.configPath, "utf-8"));
+
+        // Store a clone of the original prices table, so we can make sure things don't go too crazy
+        const databaseServer = Mod.container.resolve<DatabaseServer>("DatabaseServer");
+        const priceTable = databaseServer.getTables().templates.prices;
+        Mod.originalPrices = structuredClone(priceTable);
 
         // Update prices on startup
         const currentTime = Math.floor(Date.now() / 1000);
@@ -40,6 +47,7 @@ class Mod implements IPostDBLoadModAsync
     {
         const logger = Mod.container.resolve<ILogger>("WinstonLogger");
         const databaseServer = Mod.container.resolve<DatabaseServer>("DatabaseServer");
+        const ragfairPriceService = Mod.container.resolve<RagfairPriceService>("RagfairPriceService");
         const priceTable = databaseServer.getTables().templates.prices;
         const itemTable = databaseServer.getTables().templates.items;
         const handbookTable = databaseServer.getTables().templates.handbook;
@@ -79,27 +87,32 @@ class Mod implements IPostDBLoadModAsync
         {
             if (!itemTable[itemId])
             {
-                logger.debug(`Skipping ${itemId} as it doesn't exist in itemTable`);
                 continue;
             }
 
-            let basePrice = priceTable[itemId];
+            let basePrice = Mod.originalPrices[itemId];
             if (!basePrice)
             {
-                basePrice = handbookTable.Items.find(x => x.Id === itemId)?.Price ?? 1;
+                basePrice = handbookTable.Items.find(x => x.Id === itemId)?.Price ?? 0;
             }
 
             const maxPrice = basePrice * Mod.config.maxIncreaseMult;
-            if (prices[itemId] <= maxPrice)
+            if (maxPrice !== 0 && prices[itemId] <= maxPrice)
             {
                 priceTable[itemId] = prices[itemId];
             }
             else
             {
-                logger.debug(`Setting ${itemId} to ${maxPrice} due to over inflation`);
+                logger.debug(`Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
                 priceTable[itemId] = maxPrice;
             }
         }
+
+        // Update dynamic price cache. 
+        // Note: We currently cast to `any` to bypass the protected state of the generateDynamicPrices method
+        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+        (ragfairPriceService as any).generateDynamicPrices();
+
         logger.info("Flea Prices Updated!");
 
         return true;
