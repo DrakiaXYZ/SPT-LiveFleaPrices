@@ -14,6 +14,7 @@ class Mod implements IPostDBLoadModAsync
     private static config: Config;
     private static configPath = path.resolve(__dirname, "../config/config.json");
     private static pricesPath = path.resolve(__dirname, "../config/prices.json");
+    private static blacklistedPath = path.resolve(__dirname, "../config/blacklisted.json")
     private static originalPrices;
 
     public async postDBLoadAsync(container: DependencyContainer): Promise<void> 
@@ -51,6 +52,7 @@ class Mod implements IPostDBLoadModAsync
         const priceTable = databaseServer.getTables().templates.prices;
         const itemTable = databaseServer.getTables().templates.items;
         const handbookTable = databaseServer.getTables().templates.handbook;
+        const blacklistedItems = JSON.parse(fs.readFileSync(Mod.blacklistedPath, "utf-8"));
         let prices: Record<string, number>;
 
         // Fetch the latest prices.json if we're triggered with fetch enabled, or the prices file doesn't exist
@@ -87,6 +89,12 @@ class Mod implements IPostDBLoadModAsync
         {
             if (!itemTable[itemId])
             {
+                continue;
+            }
+            
+            if(blacklistedItems.includes(itemId))
+            {
+                logger.debug(`Item ${itemId} was skipped due to it being blacklisted.`)
                 continue;
             }
 
