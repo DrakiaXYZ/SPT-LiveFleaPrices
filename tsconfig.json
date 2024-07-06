@@ -1,9 +1,9 @@
 {
     "compilerOptions": {
         "allowJs": true,
-        "module": "CommonJS",
+        "module": "NodeNext",
         "target": "ES2022",
-        "moduleResolution": "Node10",
+        "moduleResolution": "NodeNext",
         "esModuleInterop": true,
         "downlevelIteration": true,
         "experimentalDecorators": true,
@@ -12,7 +12,7 @@
         "outDir": "tmp",
         "baseUrl": ".",
         "paths": {
-            "@spt-aki/*": ["./types/*"]
+            "@spt/*": ["./types/*"],
         }
     },
     "include": [

@@ -1,9 +1,9 @@
 import type { DependencyContainer } from "tsyringe";
 
-import type { ILogger } from "@spt-aki/models/spt/utils/ILogger";
-import type { IPostDBLoadModAsync } from "@spt-aki/models/external/IPostDBLoadModAsync";
-import type { DatabaseServer } from "@spt-aki/servers/DatabaseServer";
-import type { RagfairPriceService } from "@spt-aki/services/RagfairPriceService";
+import type { ILogger } from "@spt/models/spt/utils/ILogger";
+import type { IPostDBLoadModAsync } from "@spt/models/external/IPostDBLoadModAsync";
+import type { DatabaseServer } from "@spt/servers/DatabaseServer";
+import type { RagfairPriceService } from "@spt/services/RagfairPriceService";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -14,13 +14,17 @@ class Mod implements IPostDBLoadModAsync
     private static config: Config;
     private static configPath = path.resolve(__dirname, "../config/config.json");
     private static pricesPath = path.resolve(__dirname, "../config/prices.json");
-    private static blacklistedPath = path.resolve(__dirname, "../config/blacklisted.json")
+
+    private static blacklistPath = path.resolve(__dirname, "../config/blacklist.json")
+    private static blacklist: string[];
+
     private static originalPrices;
 
     public async postDBLoadAsync(container: DependencyContainer): Promise<void> 
     {
         Mod.container = container;
         Mod.config = JSON.parse(fs.readFileSync(Mod.configPath, "utf-8"));
+        Mod.blacklist = JSON.parse(fs.readFileSync(Mod.blacklistPath, "utf-8"));
 
         // Store a clone of the original prices table, so we can make sure things don't go too crazy
         const databaseServer = Mod.container.resolve<DatabaseServer>("DatabaseServer");
@@ -52,7 +56,6 @@ class Mod implements IPostDBLoadModAsync
         const priceTable = databaseServer.getTables().templates.prices;
         const itemTable = databaseServer.getTables().templates.items;
         const handbookTable = databaseServer.getTables().templates.handbook;
-        const blacklistedItems = JSON.parse(fs.readFileSync(Mod.blacklistedPath, "utf-8"));
         let prices: Record<string, number>;
 
         // Fetch the latest prices.json if we're triggered with fetch enabled, or the prices file doesn't exist
@@ -87,12 +90,14 @@ class Mod implements IPostDBLoadModAsync
         // Loop through the new prices file, updating all prices present
         for (const itemId in prices)
         {
+            // Skip any price that doesn't exist in the item table
             if (!itemTable[itemId])
             {
                 continue;
             }
             
-            if(blacklistedItems.includes(itemId))
+            // Skip any item that's blacklisted
+            if (Mod.blacklist.includes(itemId))
             {
                 logger.debug(`Item ${itemId} was skipped due to it being blacklisted.`)
                 continue;
@@ -116,10 +121,8 @@ class Mod implements IPostDBLoadModAsync
             }
         }
 
-        // Update dynamic price cache. 
-        // Note: We currently cast to `any` to bypass the protected state of the generateDynamicPrices method
-        // biome-ignore lint/suspicious/noExplicitAny: <explanation>
-        (ragfairPriceService as any).generateDynamicPrices();
+        // Refresh dynamic price cache.
+        ragfairPriceService.refreshDynamicPrices();
 
         logger.info("Flea Prices Updated!");
 

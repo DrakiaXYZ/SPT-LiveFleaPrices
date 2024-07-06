@@ -1,10 +1,10 @@
 {
     "name": "LiveFleaPrices",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "main": "src/mod.js",
     "license": "MIT",
     "author": "DrakiaXYZ",
-    "akiVersion": "~3.8",
+    "sptVersion": "~3.9",
     "scripts": {
         "setup": "npm i",
         "build": "node ./build.mjs",
@@ -18,7 +18,6 @@
         "eslint": "8.57",
         "fs-extra": "11.2",
         "ignore": "^5.2",
-        "os": "^0.1",
         "tsyringe": "4.8.0",
         "typescript": "5.4",
         "winston": "3.12"
