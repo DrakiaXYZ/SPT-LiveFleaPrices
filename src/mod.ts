@@ -4,6 +4,10 @@ import type { ILogger } from "@spt/models/spt/utils/ILogger";
 import type { IPostDBLoadModAsync } from "@spt/models/external/IPostDBLoadModAsync";
 import type { DatabaseServer } from "@spt/servers/DatabaseServer";
 import type { RagfairPriceService } from "@spt/services/RagfairPriceService";
+import type { ConfigServer } from "@spt/servers/ConfigServer";
+import type { IRagfairConfig } from "@spt/models/spt/config/IRagfairConfig";
+import type { TraderHelper } from "@spt/helpers/TraderHelper";
+import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -53,16 +57,19 @@ class Mod implements IPostDBLoadModAsync
         const logger = Mod.container.resolve<ILogger>("WinstonLogger");
         const databaseServer = Mod.container.resolve<DatabaseServer>("DatabaseServer");
         const ragfairPriceService = Mod.container.resolve<RagfairPriceService>("RagfairPriceService");
+        const ragfairConfig = Mod.container.resolve<ConfigServer>("ConfigServer").getConfig(ConfigTypes.RAGFAIR) as IRagfairConfig;
+        const traderHelper = Mod.container.resolve<TraderHelper>("TraderHelper");
         const priceTable = databaseServer.getTables().templates.prices;
         const itemTable = databaseServer.getTables().templates.items;
         const handbookTable = databaseServer.getTables().templates.handbook;
+        const gameMode = Mod.config.pvePrices ? "pve" : "regular";
         let prices: Record<string, number>;
 
         // Fetch the latest prices.json if we're triggered with fetch enabled, or the prices file doesn't exist
         if (fetchPrices || !fs.existsSync(Mod.pricesPath))
         {
-            logger.info("Fetching Flea Prices...");
-            const response = await fetch("https://raw.githubusercontent.com/DrakiaXYZ/SPT-LiveFleaPriceDB/main/prices.json");
+            logger.info(`Fetching Flea Prices for gamemode ${gameMode}...`);
+            const response = await fetch(`https://raw.githubusercontent.com/DrakiaXYZ/SPT-LiveFleaPriceDB/main/prices-${gameMode}.json`);
 
             // If the request failed, disable future updating
             if (!response?.ok)
@@ -119,6 +126,19 @@ class Mod implements IPostDBLoadModAsync
                 logger.debug(`Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
                 priceTable[itemId] = maxPrice;
             }
+
+            // Special handling in the event `useTraderPriceForOffersIfHigher` is enabled, to fix issues selling items
+            if (ragfairConfig.dynamic.useTraderPriceForOffersIfHigher)
+            {
+                // If the trader price is greater than the flea price, set the flea price to 10% higher than the trader price
+                const traderPrice = traderHelper.getHighestSellToTraderPrice(itemId);
+                if (traderPrice > priceTable[itemId])
+                {
+                    const newPrice = Math.floor(traderPrice * 1.1);
+                    logger.debug(`Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
+                    priceTable[itemId] = newPrice;
+                }
+            }
         }
 
         // Refresh dynamic price cache.
@@ -134,6 +154,7 @@ interface Config
 {
     nextUpdate: number,
     maxIncreaseMult: number,
+    pvePrices: boolean,
 }
 
 module.exports = { mod: new Mod() }

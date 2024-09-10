@@ -1,4 +1,5 @@
 {
     "nextUpdate": 0,
-    "maxIncreaseMult": 10
+    "maxIncreaseMult": 10,
+    "pvePrices": false
 }
