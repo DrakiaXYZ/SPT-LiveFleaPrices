@@ -118,7 +118,7 @@ async function main() {
         // Create a zip archive of the project files.
         logger.log("info", "Beginning folder compression...");
         const zipFilePath = path.join(path.dirname(projectDir), `${projectZip}.zip`);
-        await createZipFile(projectDir, zipFilePath, "user/mods/" + projectName);
+        await createZipFile(projectDir, zipFilePath, `user/mods/zz${projectName}`);
         logger.log("success", "Archive successfully created.");
         logger.log("info", zipFilePath);
 
@@ -144,7 +144,7 @@ async function main() {
         }
     } catch (err) {
         // If any of the file operations fail, log the error.
-        logger.log("error", "An error occurred: " + err);
+        logger.log("error", `An error occurred: ${err}`);
     } finally {
         // Clean up the temporary directory, even if the build fails.
         if (projectDir) {
@@ -152,7 +152,7 @@ async function main() {
                 await fs.promises.rm(projectDir, { force: true, recursive: true });
                 logger.log("info", "Cleaned temporary directory.");
             } catch (err) {
-                logger.log("error", "Failed to clean temporary directory: " + err);
+                logger.log("error", `Failed to clean temporary directory: ${err}`);
             }
         }
     }
@@ -330,7 +330,7 @@ async function copyFiles(srcDir, destDir, ignoreHandler) {
         await Promise.all(copyOperations);
     } catch (err) {
         // Log an error message if any error occurs during the copy process.
-        logger.log("error", "Error copying files: " + err);
+        logger.log("error", `Error copying files: ${err}`);
     }
 }
 
@@ -354,14 +354,14 @@ async function createZipFile(directoryToZip, zipFilePath, containerDirName) {
         });
 
         // Set up an event listener for the 'close' event to resolve the promise when the archiver has finalized.
-        output.on("close", function () {
+        output.on("close", () => {
             logger.log("info", "Archiver has finalized. The output and the file descriptor have closed.");
             resolve();
         });
 
         // Set up an event listener for the 'warning' event to handle warnings appropriately, logging them or rejecting
         // the promise based on the error code.
-        archive.on("warning", function (err) {
+        archive.on("warning", (err) => {
             if (err.code === "ENOENT") {
                 logger.log("warn", `Archiver issued a warning: ${err.code} - ${err.message}`);
             } else {
@@ -370,7 +370,7 @@ async function createZipFile(directoryToZip, zipFilePath, containerDirName) {
         });
 
         // Set up an event listener for the 'error' event to reject the promise if any error occurs during archiving.
-        archive.on("error", function (err) {
+        archive.on("error", (err) => {
             reject(err);
         });
 
