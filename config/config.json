@@ -1,5 +1,7 @@
 {
     "nextUpdate": 0,
     "maxIncreaseMult": 10,
-    "pvePrices": false
+    "maxLimiter": false,
+    "pvePrices": false,
+    "debug": false
 }

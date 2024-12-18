@@ -106,7 +106,10 @@ class Mod implements IPostDBLoadModAsync
             // Skip any item that's blacklisted
             if (Mod.blacklist.includes(itemId))
             {
-                logger.debug(`Item ${itemId} was skipped due to it being blacklisted.`)
+                if (Mod.config.debug)
+                {
+                    logger.debug(`Item ${itemId} was skipped due to it being blacklisted.`)
+                }
                 continue;
             }
 
@@ -117,13 +120,16 @@ class Mod implements IPostDBLoadModAsync
             }
 
             const maxPrice = basePrice * Mod.config.maxIncreaseMult;
-            if (maxPrice !== 0 && prices[itemId] <= maxPrice)
+            if (maxPrice !== 0 && (!Mod.config.maxLimiter || prices[itemId] <= maxPrice))
             {
                 priceTable[itemId] = prices[itemId];
             }
             else
             {
-                logger.debug(`Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
+                if (Mod.config.debug)
+                {
+                    logger.debug(`Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
+                }
                 priceTable[itemId] = maxPrice;
             }
 
@@ -135,7 +141,10 @@ class Mod implements IPostDBLoadModAsync
                 if (traderPrice > priceTable[itemId])
                 {
                     const newPrice = Math.floor(traderPrice * 1.1);
-                    logger.debug(`Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
+                    if (Mod.config.debug)
+                    {
+                        logger.debug(`Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
+                    }
                     priceTable[itemId] = newPrice;
                 }
             }
@@ -143,8 +152,6 @@ class Mod implements IPostDBLoadModAsync
 
         // Refresh dynamic price cache.
         ragfairPriceService.refreshDynamicPrices();
-
-        logger.info("Flea Prices Updated!");
 
         return true;
     }
@@ -154,7 +161,9 @@ interface Config
 {
     nextUpdate: number,
     maxIncreaseMult: number,
+    maxLimiter: boolean,
     pvePrices: boolean,
+    debug: boolean,
 }
 
 module.exports = { mod: new Mod() }
