@@ -11,7 +11,7 @@ import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-class Mod implements IPostDBLoadModAsync
+class Mod implements IPostDBLoadModAsync 
 {
     private static container: DependencyContainer;
     private static updateTimer: NodeJS.Timeout;
@@ -38,12 +38,12 @@ class Mod implements IPostDBLoadModAsync
         // Update prices on startup
         const currentTime = Math.floor(Date.now() / 1000);
         let fetchPrices = false;
-        if (currentTime > Mod.config.nextUpdate)
+        if (currentTime > Mod.config.nextUpdate) 
         {
             fetchPrices = true;
         }
 
-        if (!await Mod.updatePrices(fetchPrices))
+        if (!await Mod.updatePrices(fetchPrices)) 
         {
             return;
         }
@@ -52,7 +52,7 @@ class Mod implements IPostDBLoadModAsync
         Mod.updateTimer = setInterval(Mod.updatePrices, (60 * 60 * 1000));
     }
 
-    static async updatePrices(fetchPrices = true): Promise<boolean>
+    static async updatePrices(fetchPrices = true): Promise<boolean> 
     {
         const logger = Mod.container.resolve<ILogger>("WinstonLogger");
         const databaseServer = Mod.container.resolve<DatabaseServer>("DatabaseServer");
@@ -63,18 +63,45 @@ class Mod implements IPostDBLoadModAsync
         const itemTable = databaseServer.getTables().templates.items;
         const handbookTable = databaseServer.getTables().templates.handbook;
         const gameMode = Mod.config.pvePrices ? "pve" : "regular";
+        const maxRetries = Mod.config.maxRetries ?? 3;
         let prices: Record<string, number>;
 
         // Fetch the latest prices.json if we're triggered with fetch enabled, or the prices file doesn't exist
-        if (fetchPrices || !fs.existsSync(Mod.pricesPath))
+        if (fetchPrices || !fs.existsSync(Mod.pricesPath)) 
         {
-            logger.info(`Fetching Flea Prices for gamemode ${gameMode}...`);
-            const response = await fetch(`https://raw.githubusercontent.com/DrakiaXYZ/SPT-LiveFleaPriceDB/main/prices-${gameMode}.json`);
+            logger.info(`[LiveFleaPrices] Fetching Flea Prices for gamemode ${gameMode}...`);
 
-            // If the request failed, disable future updating
-            if (!response?.ok)
-            {
-                logger.error(`Error fetching flea prices: ${response.status} (${response.statusText})`);
+            let response;
+
+            for (let retryCount = 1; retryCount <= maxRetries; retryCount++) {
+                try {
+                    response = await fetch(`https://raw.githubusercontent.com/DrakiaXYZ/SPT-LiveFleaPriceDB/main/prices-${gameMode}.json`);
+
+                    if (response.ok) {
+                        logger.info(`[LiveFleaPrices] Fetch attempt ${retryCount} successful.`);
+                        break;
+                    }
+
+                    if (retryCount === maxRetries) {
+                        break;
+                    }
+
+                    logger.warning(`[LiveFleaPrices] Fetch attempt ${retryCount} failed, retrying...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+                } catch (error) {
+                    if (retryCount === maxRetries) {
+                        logger.error(`[LiveFleaPrices] Final fetch attempt failed with error: ${error.message}`);
+                        break;
+                    }
+
+                    logger.warning(`[LiveFleaPrices] Fetch attempt ${retryCount} failed with error: ${error.message}, retrying...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+                }
+            }
+
+            // If all retries failed, disable future updating
+            if (!response?.ok) {
+                logger.error(`[LiveFleaPrices] All ${maxRetries} fetch attempts failed. Last status: ${response?.status} (${response?.statusText})`);
                 clearInterval(Mod.updateTimer);
                 return false;
             }
@@ -86,64 +113,70 @@ class Mod implements IPostDBLoadModAsync
 
             // Update config file with the next update time
             Mod.config.nextUpdate = Math.floor(Date.now() / 1000) + 3600;
+
+            // Add log message showing next update time
+            const nextUpdateDate = new Date(Mod.config.nextUpdate * 1000);
+            logger.info(`[LiveFleaPrices] Next price update scheduled for: ${nextUpdateDate.toLocaleString()}`);
+
             fs.writeFileSync(Mod.configPath, JSON.stringify(Mod.config, null, 4));
         }
         // Otherwise, read the file from disk
-        else
+        else 
         {
+            logger.info(`[LiveFleaPrices] Using cached prices.`);
             prices = JSON.parse(fs.readFileSync(Mod.pricesPath, "utf-8"));
         }
 
         // Loop through the new prices file, updating all prices present
-        for (const itemId in prices)
+        for (const itemId in prices) 
         {
             // Skip any price that doesn't exist in the item table
-            if (!itemTable[itemId])
+            if (!itemTable[itemId]) 
             {
                 continue;
             }
-            
+
             // Skip any item that's blacklisted
-            if (Mod.blacklist.includes(itemId))
+            if (Mod.blacklist.includes(itemId)) 
             {
-                if (Mod.config.debug)
+                if (Mod.config.debug) 
                 {
-                    logger.debug(`Item ${itemId} was skipped due to it being blacklisted.`)
+                    logger.debug(`[LiveFleaPrices] Item ${itemId} was skipped due to it being blacklisted.`);
                 }
                 continue;
             }
 
             let basePrice = Mod.originalPrices[itemId];
-            if (!basePrice)
+            if (!basePrice) 
             {
                 basePrice = handbookTable.Items.find(x => x.Id === itemId)?.Price ?? 0;
             }
 
             const maxPrice = basePrice * Mod.config.maxIncreaseMult;
-            if (maxPrice !== 0 && (!Mod.config.maxLimiter || prices[itemId] <= maxPrice))
+            if (maxPrice !== 0 && (!Mod.config.maxLimiter || prices[itemId] <= maxPrice)) 
             {
                 priceTable[itemId] = prices[itemId];
             }
-            else
+            else 
             {
-                if (Mod.config.debug)
+                if (Mod.config.debug) 
                 {
-                    logger.debug(`Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
+                    logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
                 }
                 priceTable[itemId] = maxPrice;
             }
 
             // Special handling in the event `useTraderPriceForOffersIfHigher` is enabled, to fix issues selling items
-            if (ragfairConfig.dynamic.useTraderPriceForOffersIfHigher)
+            if (ragfairConfig.dynamic.useTraderPriceForOffersIfHigher) 
             {
                 // If the trader price is greater than the flea price, set the flea price to 10% higher than the trader price
                 const traderPrice = traderHelper.getHighestSellToTraderPrice(itemId);
-                if (traderPrice > priceTable[itemId])
+                if (traderPrice > priceTable[itemId]) 
                 {
                     const newPrice = Math.floor(traderPrice * 1.1);
-                    if (Mod.config.debug)
+                    if (Mod.config.debug) 
                     {
-                        logger.debug(`Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
+                        logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
                     }
                     priceTable[itemId] = newPrice;
                 }
@@ -164,6 +197,7 @@ interface Config
     maxLimiter: boolean,
     pvePrices: boolean,
     debug: boolean,
+    maxRetries?: number,
 }
 
 module.exports = { mod: new Mod() }
