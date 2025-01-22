@@ -63,18 +63,45 @@ class Mod implements IPostDBLoadModAsync
         const itemTable = databaseServer.getTables().templates.items;
         const handbookTable = databaseServer.getTables().templates.handbook;
         const gameMode = Mod.config.pvePrices ? "pve" : "regular";
+        const maxRetries = Mod.config.maxRetries ?? 3;
         let prices: Record<string, number>;
 
         // Fetch the latest prices.json if we're triggered with fetch enabled, or the prices file doesn't exist
         if (fetchPrices || !fs.existsSync(Mod.pricesPath))
         {
-            logger.info(`Fetching Flea Prices for gamemode ${gameMode}...`);
-            const response = await fetch(`https://raw.githubusercontent.com/DrakiaXYZ/SPT-LiveFleaPriceDB/main/prices-${gameMode}.json`);
+            logger.info(`[LiveFleaPrices] Fetching Flea Prices for gamemode ${gameMode}...`);
 
-            // If the request failed, disable future updating
-            if (!response?.ok)
-            {
-                logger.error(`Error fetching flea prices: ${response.status} (${response.statusText})`);
+            let response;
+
+            for (let retryCount = 1; retryCount <= maxRetries; retryCount++) {
+                try {
+                    response = await fetch(`https://raw.githubusercontent.com/DrakiaXYZ/SPT-LiveFleaPriceDB/main/prices-${gameMode}.json`);
+
+                    if (response.ok) {
+                        logger.info(`[LiveFleaPrices] Fetch attempt ${retryCount} successful.`);
+                        break;
+                    }
+
+                    if (retryCount === maxRetries) {
+                        break;
+                    }
+
+                    logger.warning(`[LiveFleaPrices] Fetch attempt ${retryCount} failed, retrying...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+                } catch (error) {
+                    if (retryCount === maxRetries) {
+                        logger.error(`[LiveFleaPrices] Final fetch attempt failed with error: ${error.message}`);
+                        break;
+                    }
+
+                    logger.warning(`[LiveFleaPrices] Fetch attempt ${retryCount} failed with error: ${error.message}, retrying...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+                }
+            }
+
+            // If all retries failed, disable future updating
+            if (!response?.ok) {
+                logger.error(`[LiveFleaPrices] All ${maxRetries} fetch attempts failed. Last status: ${response?.status} (${response?.statusText})`);
                 clearInterval(Mod.updateTimer);
                 return false;
             }
@@ -86,11 +113,17 @@ class Mod implements IPostDBLoadModAsync
 
             // Update config file with the next update time
             Mod.config.nextUpdate = Math.floor(Date.now() / 1000) + 3600;
+
+            // Add log message showing next update time
+            const nextUpdateDate = new Date(Mod.config.nextUpdate * 1000);
+            logger.info(`[LiveFleaPrices] Next price update scheduled for: ${nextUpdateDate.toLocaleString()}`);
+
             fs.writeFileSync(Mod.configPath, JSON.stringify(Mod.config, null, 4));
         }
         // Otherwise, read the file from disk
         else
         {
+            logger.info(`[LiveFleaPrices] Using cached prices.`);
             prices = JSON.parse(fs.readFileSync(Mod.pricesPath, "utf-8"));
         }
 
@@ -102,13 +135,13 @@ class Mod implements IPostDBLoadModAsync
             {
                 continue;
             }
-            
+
             // Skip any item that's blacklisted
             if (Mod.blacklist.includes(itemId))
             {
                 if (Mod.config.debug)
                 {
-                    logger.debug(`Item ${itemId} was skipped due to it being blacklisted.`)
+                    logger.debug(`[LiveFleaPrices] Item ${itemId} was skipped due to it being blacklisted.`);
                 }
                 continue;
             }
@@ -128,7 +161,7 @@ class Mod implements IPostDBLoadModAsync
             {
                 if (Mod.config.debug)
                 {
-                    logger.debug(`Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
+                    logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
                 }
                 priceTable[itemId] = maxPrice;
             }
@@ -143,7 +176,7 @@ class Mod implements IPostDBLoadModAsync
                     const newPrice = Math.floor(traderPrice * 1.1);
                     if (Mod.config.debug)
                     {
-                        logger.debug(`Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
+                        logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
                     }
                     priceTable[itemId] = newPrice;
                 }
@@ -157,13 +190,14 @@ class Mod implements IPostDBLoadModAsync
     }
 }
 
-interface Config 
+interface Config
 {
     nextUpdate: number,
     maxIncreaseMult: number,
     maxLimiter: boolean,
     pvePrices: boolean,
     debug: boolean,
+    maxRetries?: number,
 }
 
 module.exports = { mod: new Mod() }
