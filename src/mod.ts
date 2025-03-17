@@ -68,21 +68,40 @@ class Mod implements IPostDBLoadModAsync
         // Fetch the latest prices.json if we're triggered with fetch enabled, or the prices file doesn't exist
         if (fetchPrices || !fs.existsSync(Mod.pricesPath))
         {
-            logger.info(`Fetching Flea Prices for gamemode ${gameMode}...`);
-            const response = await fetch(`https://raw.githubusercontent.com/DrakiaXYZ/SPT-LiveFleaPriceDB/main/prices-${gameMode}.json`);
-
-            // If the request failed, disable future updating
-            if (!response?.ok)
+            logger.info(`[LiveFleaPrices] Fetching Flea Prices for gamemode ${gameMode}...`);
+            try
             {
-                logger.error(`Error fetching flea prices: ${response.status} (${response.statusText})`);
-                clearInterval(Mod.updateTimer);
-                return false;
+                const response = await fetch(`https://raw.githubusercontent.com/DrakiaXYZ/SPT-LiveFleaPriceDB/main/prices-${gameMode}.json`);
+
+                // If the request failed, disable future updating
+                if (!response?.ok)
+                {
+                    logger.error(`[LiveFleaPrices] Error fetching flea prices: ${response.status} (${response.statusText})`);
+                    clearInterval(Mod.updateTimer);
+                    return false;
+                }
+
+                prices = await response.json();
+
+                // Store the prices to disk for next time
+                fs.writeFileSync(Mod.pricesPath, JSON.stringify(prices));
             }
+            catch (ex)
+            {
+                logger.error(`[LiveFleaPrices] Error fetching flea prices: ${ex}`);
+                logger.error("[LiveFleaPrices] This is unlikely due to the mod, and more likely due to a system configuration issue");
 
-            prices = await response.json();
-
-            // Store the prices to disk for next time
-            fs.writeFileSync(Mod.pricesPath, JSON.stringify(prices));
+                if (fs.existsSync(Mod.pricesPath))
+                {
+                    logger.success("[LiveFleaPrices] Falling back to existing prices file");
+                    prices = JSON.parse(fs.readFileSync(Mod.pricesPath, "utf-8"));
+                }
+                else
+                {
+                    logger.error("[LiveFleaPrices] Unable to fetch prices, and no local prices file. Skipping LiveFleaPrices");
+                    return;
+                }
+            }
 
             // Update config file with the next update time
             Mod.config.nextUpdate = Math.floor(Date.now() / 1000) + 3600;
@@ -108,7 +127,7 @@ class Mod implements IPostDBLoadModAsync
             {
                 if (Mod.config.debug)
                 {
-                    logger.debug(`Item ${itemId} was skipped due to it being blacklisted.`)
+                    logger.debug(`[LiveFleaPrices] Item ${itemId} was skipped due to it being blacklisted.`)
                 }
                 continue;
             }
@@ -128,7 +147,7 @@ class Mod implements IPostDBLoadModAsync
             {
                 if (Mod.config.debug)
                 {
-                    logger.debug(`Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
+                    logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
                 }
                 priceTable[itemId] = maxPrice;
             }
@@ -143,7 +162,7 @@ class Mod implements IPostDBLoadModAsync
                     const newPrice = Math.floor(traderPrice * 1.1);
                     if (Mod.config.debug)
                     {
-                        logger.debug(`Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
+                        logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
                     }
                     priceTable[itemId] = newPrice;
                 }
