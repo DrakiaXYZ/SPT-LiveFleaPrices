@@ -1,7 +1,7 @@
 import type { DependencyContainer } from "tsyringe";
 
 import type { ILogger } from "@spt/models/spt/utils/ILogger";
-import type { IPostDBLoadModAsync } from "@spt/models/external/IPostDBLoadModAsync";
+import type { IPostSptLoadModAsync } from "@spt/models/external/IPostSptLoadModAsync";
 import type { DatabaseServer } from "@spt/servers/DatabaseServer";
 import type { RagfairPriceService } from "@spt/services/RagfairPriceService";
 import type { ConfigServer } from "@spt/servers/ConfigServer";
@@ -11,7 +11,7 @@ import { ConfigTypes } from "@spt/models/enums/ConfigTypes";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-class Mod implements IPostDBLoadModAsync
+class Mod implements IPostSptLoadModAsync
 {
     private static container: DependencyContainer;
     private static updateTimer: NodeJS.Timeout;
@@ -24,7 +24,7 @@ class Mod implements IPostDBLoadModAsync
 
     private static originalPrices;
 
-    public async postDBLoadAsync(container: DependencyContainer): Promise<void> 
+    public async postSptLoadAsync(container: DependencyContainer): Promise<void>
     {
         Mod.container = container;
         Mod.config = JSON.parse(fs.readFileSync(Mod.configPath, "utf-8"));
