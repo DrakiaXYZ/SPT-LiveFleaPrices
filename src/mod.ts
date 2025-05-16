@@ -139,15 +139,20 @@ class Mod implements IPostSptLoadModAsync
             }
 
             const maxPrice = basePrice * Mod.config.maxIncreaseMult;
-            if (maxPrice !== 0 && (!Mod.config.maxLimiter || prices[itemId] <= maxPrice))
+            const multiplier =
+              Mod.config.multipliers && Mod.config.multipliers[itemId]
+                ? Mod.config.multipliers[itemId]
+                : 1;
+            const itemPrice = Math.floor(prices[itemId] * multiplier);
+            if (maxPrice !== 0 && (!Mod.config.maxLimiter || itemPrice <= maxPrice))
             {
-                priceTable[itemId] = prices[itemId];
+                priceTable[itemId] = itemPrice;
             }
             else
             {
                 if (Mod.config.debug)
                 {
-                    logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${maxPrice} instead of ${prices[itemId]} due to over inflation`);
+                    logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${maxPrice} instead of ${itemPrice} due to over inflation`);
                 }
                 priceTable[itemId] = maxPrice;
             }
@@ -162,7 +167,7 @@ class Mod implements IPostSptLoadModAsync
                     const newPrice = Math.floor(traderPrice * 1.1);
                     if (Mod.config.debug)
                     {
-                        logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${newPrice} instead of ${prices[itemId]} due to trader price`);
+                        logger.debug(`[LiveFleaPrices] Setting ${itemId} to ${newPrice} instead of ${itemPrice} due to trader price`);
                     }
                     priceTable[itemId] = newPrice;
                 }
@@ -183,6 +188,7 @@ interface Config
     maxLimiter: boolean,
     pvePrices: boolean,
     debug: boolean,
+    multipliers?: Record<string, number>,
 }
 
 module.exports = { mod: new Mod() }
