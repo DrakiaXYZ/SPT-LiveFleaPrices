@@ -3,5 +3,6 @@
     "maxIncreaseMult": 10,
     "maxLimiter": false,
     "pvePrices": false,
+    "disablePriceFetching": false,
     "debug": false
 }

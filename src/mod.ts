@@ -38,7 +38,7 @@ class Mod implements IPostSptLoadModAsync
         // Update prices on startup
         const currentTime = Math.floor(Date.now() / 1000);
         let fetchPrices = false;
-        if (currentTime > Mod.config.nextUpdate)
+        if (!Mod.config.disablePriceFetching && currentTime > Mod.config.nextUpdate)
         {
             fetchPrices = true;
         }
@@ -48,8 +48,11 @@ class Mod implements IPostSptLoadModAsync
             return;
         }
 
-        // Setup a refresh interval to update once every hour
-        Mod.updateTimer = setInterval(Mod.updatePrices, (60 * 60 * 1000));
+        // Setup a refresh interval to update once every hour if updates aren't disabled
+        if (!Mod.config.disablePriceFetching)
+        {
+            Mod.updateTimer = setInterval(Mod.updatePrices, (60 * 60 * 1000));
+        }
     }
 
     static async updatePrices(fetchPrices = true): Promise<boolean>
@@ -182,6 +185,7 @@ interface Config
     maxIncreaseMult: number,
     maxLimiter: boolean,
     pvePrices: boolean,
+    disablePriceFetching: boolean,
     debug: boolean,
 }
 
